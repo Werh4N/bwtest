@@ -6,8 +6,8 @@ public class Bw {
     private int uid;
     private String status;
     private String business;
-    private int createTime;
-    private int updateTime;
+    private int create_time;
+    private int update_time;
 
     public int getId(){
         return id;
@@ -42,18 +42,18 @@ public class Bw {
     }
 
     public void setCreateTime(int createTime) {
-        this.createTime = createTime;
+        this.create_time = createTime;
     }
 
     public int getCreateTime() {
-        return createTime;
+        return create_time;
     }
 
     public void setUpdateTime(int updateTime) {
-        this.updateTime = updateTime;
+        this.update_time = updateTime;
     }
 
     public int getUpdateTime() {
-        return updateTime;
+        return update_time;
     }
 }

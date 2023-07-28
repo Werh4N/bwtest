@@ -5,6 +5,7 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.Scanner;
+import redis.clients.jedis.Jedis;
 
 public class ConsoleApp {
 
@@ -32,28 +33,37 @@ public class ConsoleApp {
 
     private static String getStatusByUidAndBusiness(int uid, String business) {
         String status = null;
+        Jedis jedis = new Jedis("localhost", 6379);
+        String key = uid + ":" + business;
+        if (jedis.exists(key)) {
+            status = jedis.get(key);
+            System.out.println("数据从Redis中获取");
+        } else {
+            try {
+                Class.forName("com.mysql.cj.jdbc.Driver");
+                Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/bwlist", "root", "123456");
 
-        try {
-            Class.forName("com.mysql.cj.jdbc.Driver");
-            Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/bwlist", "root", "123456");
+                String sql = "SELECT status FROM bwtest WHERE uid = ? AND business = ?";
+                PreparedStatement pstmt = conn.prepareStatement(sql);
+                pstmt.setInt(1, uid);
+                pstmt.setString(2, business);
 
-            String sql = "SELECT status FROM bwtest WHERE uid = ? AND business = ?";
-            PreparedStatement pstmt = conn.prepareStatement(sql);
-            pstmt.setInt(1, uid);
-            pstmt.setString(2, business);
+                ResultSet rs = pstmt.executeQuery();
+                if (rs.next()) {
+                    status = rs.getString("status");
+                    jedis.set(key, status);
+                    jedis.expire(key, 3600);
+                    System.out.println("数据从Mysql中获取");
+                }
 
-            ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) {
-                status = rs.getString("status");
+                rs.close();
+                pstmt.close();
+                conn.close();
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-
-            rs.close();
-            pstmt.close();
-            conn.close();
-        } catch (Exception e) {
-            e.printStackTrace();
         }
-
+        jedis.close();
         return status;
     }
 }

@@ -51,10 +51,13 @@ public class ConsoleApp {
                 ResultSet rs = pstmt.executeQuery();
                 if (rs.next()) {
                     status = rs.getString("status");
-                    jedis.set(key, status);
-                    jedis.expire(key, 3600);
                     System.out.println("数据从Mysql中获取");
+                } else{
+                    System.out.println("在 MySQL 中未找到数据");
+                    status = "not found";
                 }
+                jedis.set(key, status);
+                jedis.expire(key, 300);
 
                 rs.close();
                 pstmt.close();

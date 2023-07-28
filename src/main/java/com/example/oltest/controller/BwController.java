@@ -3,15 +3,21 @@ package com.example.oltest.controller;
 import com.example.oltest.Mapper.BwMapper;
 import com.example.oltest.pojo.Bw;
 import org.springframework.beans.factory.annotation.Autowired;
+
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @RestController
 @RequestMapping("/bw")
 public class BwController {
     @Autowired
     private BwMapper bwMapper;
+    @Autowired
+    private StringRedisTemplate redisTemplate;
     @GetMapping("/all")
     public List<Bw> searchAll(){
         return bwMapper.searchAll();
@@ -21,8 +27,34 @@ public class BwController {
     public String getStatusById(@PathVariable int id) {
         return bwMapper.getStatusById(id);
     }
+
     @GetMapping("/uid")
     public String getStatusByUidAndBusiness(@RequestParam int uid, @RequestParam String business) {
         return bwMapper.getStatusByUidAndBusiness(uid, business);
     }
+
+    @PostMapping("/uid")
+    public String getStatusByUidAndBusiness(@RequestBody Map<String, String> params) {
+        int uid = Integer.parseInt(params.get("uid"));
+        String business = params.get("business");
+
+        String key = uid + ":" + business;
+
+        if (redisTemplate.hasKey(key)) {
+            System.out.println("数据来自 Redis");
+            return redisTemplate.opsForValue().get(key);
+        } else {
+            String status = bwMapper.getStatusByUidAndBusiness(uid, business);
+            if (status != null) {
+                System.out.println("数据来自 MySQL");
+                redisTemplate.opsForValue().set(key, status, 300, TimeUnit.SECONDS);
+            } else {
+                System.out.println("在 MySQL 中未找到数据");
+                status = "未找到对应数据";
+                redisTemplate.opsForValue().set(key, status, 300, TimeUnit.SECONDS);
+            }
+            return status;
+        }
+    }
+
 }

@@ -2,6 +2,7 @@ package com.example.oltest.controller;
 
 import com.example.oltest.Mapper.BwMapper;
 import com.example.oltest.pojo.Bw;
+import com.example.oltest.service.BloomFilterService;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -18,6 +19,8 @@ public class BwController {
     private BwMapper bwMapper;
     @Autowired
     private StringRedisTemplate redisTemplate;
+    @Autowired
+    private BloomFilterService bloomFilterService;
     @GetMapping("/all")
     public List<Bw> searchAll(){
         return bwMapper.searchAll();
@@ -37,24 +40,32 @@ public class BwController {
     public String getStatusByUidAndBusiness(@RequestBody Map<String, String> params) {
         int uid = Integer.parseInt(params.get("uid"));
         String business = params.get("business");
-
         String key = uid + ":" + business;
 
-        if (redisTemplate.hasKey(key)) {
-            System.out.println("数据来自 Redis");
-            return redisTemplate.opsForValue().get(key);
-        } else {
-            String status = bwMapper.getStatusByUidAndBusiness(uid, business);
-            if (status != null) {
-                System.out.println("数据来自 MySQL");
-                redisTemplate.opsForValue().set(key, status, 300, TimeUnit.SECONDS);
+        if (bloomFilterService.mightContain(key)) {
+            System.out.println("布隆过滤器: 可能包含 " + key);
+            if (redisTemplate.hasKey(key)) {
+                System.out.println("数据来自 Redis");
+                return redisTemplate.opsForValue().get(key);
             } else {
-                System.out.println("在 MySQL 中未找到数据");
-                status = "未找到对应数据";
-                redisTemplate.opsForValue().set(key, status, 300, TimeUnit.SECONDS);
+                System.out.println("Redis中不存在，转而从MySQL中搜索");
             }
-            return status;
+        } else {
+            System.out.println("布隆过滤器: 不包含 " + key);
         }
+
+        String status = bwMapper.getStatusByUidAndBusiness(uid, business);
+        if (status != null) {
+            System.out.println("数据来自 MySQL");
+            redisTemplate.opsForValue().set(key, status, 300, TimeUnit.SECONDS);
+            System.out.println("已添加 " + key + " 到redis");
+            bloomFilterService.put(key);
+            System.out.println("已添加 " + key + " 到布隆过滤器");
+        } else {
+            System.out.println("在 MySQL 中未找到数据");
+            status = "未找到对应数据";
+        }
+        return status;
     }
 
 }

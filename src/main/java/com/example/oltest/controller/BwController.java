@@ -3,6 +3,7 @@ package com.example.oltest.controller;
 import com.example.oltest.Mapper.BwMapper;
 import com.example.oltest.pojo.Bw;
 import com.example.oltest.service.BloomFilterService;
+import com.example.oltest.service.CacheService;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 @RestController
@@ -21,6 +23,8 @@ public class BwController {
     private StringRedisTemplate redisTemplate;
     @Autowired
     private BloomFilterService bloomFilterService;
+    @Autowired
+    private CacheService cacheService;
     @GetMapping("/all")
     public List<Bw> searchAll(){
         return bwMapper.searchAll();
@@ -37,10 +41,17 @@ public class BwController {
     }
 
     @PostMapping("/uid")
-    public String getStatusByUidAndBusiness(@RequestBody Map<String, String> params) {
+    public String getStatusByUidAndBusiness(@RequestBody Map<String, String> params) throws ExecutionException {
         int uid = Integer.parseInt(params.get("uid"));
         String business = params.get("business");
         String key = uid + ":" + business;
+
+        String status = cacheService.getStatusByUidAndBusiness(key);
+
+        if (status != null) {
+            System.out.println("数据来自 LoadingCache");
+            return status;
+        }
 
         if (bloomFilterService.mightContain(key)) {
             System.out.println("布隆过滤器: 可能包含 " + key);
@@ -54,13 +65,15 @@ public class BwController {
             System.out.println("布隆过滤器: 不包含 " + key);
         }
 
-        String status = bwMapper.getStatusByUidAndBusiness(uid, business);
+        status = bwMapper.getStatusByUidAndBusiness(uid, business);
         if (status != null) {
             System.out.println("数据来自 MySQL");
             redisTemplate.opsForValue().set(key, status, 300, TimeUnit.SECONDS);
             System.out.println("已添加 " + key + " 到redis");
             bloomFilterService.put(key);
             System.out.println("已添加 " + key + " 到布隆过滤器");
+            cacheService.putStatusByUidAndBusiness(key, status);
+            System.out.println("已添加 " + key + " 到LoadingCache");
         } else {
             System.out.println("在 MySQL 中未找到数据");
             status = "未找到对应数据";

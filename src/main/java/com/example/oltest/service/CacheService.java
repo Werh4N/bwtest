@@ -16,6 +16,7 @@ public class CacheService {
     public CacheService() {
         this.loadingCache = CacheBuilder.newBuilder()
                 .maximumSize(1000)
+                .refreshAfterWrite(1, TimeUnit.MINUTES)
                 .expireAfterWrite(5, TimeUnit.MINUTES)
                 .build(new CacheLoader<String, String>() {
                     public String load(String key) throws DataNotFoundException {
